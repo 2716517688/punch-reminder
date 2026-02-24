@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'package:geolocator/geolocator.dart';
+import 'package:usage_stats/usage_stats.dart';
 import 'notification_service.dart';
 
 class LocationService {
   static Timer? _checkTimer;
   static bool _alerted = false;
+  static const String _fxiaoxiaokePackage = 'com.fxiaoke.sales';
 
   static void startMonitoring({
     required double officeLat,
@@ -16,7 +18,7 @@ class LocationService {
     stopMonitoring();
     _alerted = false;
 
-    // 每30秒检查一次位置
+    // 每30秒检查一次
     _checkTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
       await _doCheck(officeLat, officeLng, thresholdMeters, startHour, onUpdate);
     });
@@ -48,22 +50,44 @@ class LocationService {
         _startPersistentReminder();
       }
 
-      // 如果回到公司范围内，重置提醒
-      if (!isLeaving && _alerted) {
-        _alerted = false;
-        _stopPersistentReminder();
+      // 已触发提醒后，检测纷享销客是否打开
+      if (_alerted) {
+        final opened = await _isFxiaoxiaokeOpened();
+        if (opened) {
+          _alerted = false;
+          _stopPersistentReminder();
+        }
       }
 
-      onUpdate(distance, pos, isActiveTime && isLeaving);
+      onUpdate(distance, pos, _alerted && isActiveTime);
     } catch (_) {}
+  }
+
+  /// 检测纷享销客最近2分钟内是否被使用过
+  static Future<bool> _isFxiaoxiaokeOpened() async {
+    try {
+      final now = DateTime.now();
+      final start = now.subtract(const Duration(minutes: 2));
+      final stats = await UsageStats.queryUsageStats(start, now);
+      for (final stat in stats) {
+        if (stat.packageName == _fxiaoxiaokePackage) {
+          final lastUsed = stat.lastTimeUsed;
+          if (lastUsed != null) {
+            final lastTime = DateTime.fromMillisecondsSinceEpoch(int.parse(lastUsed));
+            if (lastTime.isAfter(start)) {
+              return true;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    return false;
   }
 
   static Timer? _reminderTimer;
 
   static void _startPersistentReminder() {
-    // 立即发一次通知
     NotificationService.showReminder();
-    // 然后每60秒重复提醒
     _reminderTimer?.cancel();
     _reminderTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       NotificationService.showReminder();

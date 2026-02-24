@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:usage_stats/usage_stats.dart';
 import 'location_service.dart';
 import 'notification_service.dart';
 
@@ -40,7 +41,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   double? _officeLat;
   double? _officeLng;
-  double _threshold = 200;
+  double _threshold = 50;
   int _startHour = 19;
   bool _monitoring = false;
   String _status = '未启动';
@@ -57,7 +58,7 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _officeLat = prefs.getDouble('office_lat');
       _officeLng = prefs.getDouble('office_lng');
-      _threshold = prefs.getDouble('threshold') ?? 200;
+      _threshold = prefs.getDouble('threshold') ?? 50;
       _startHour = prefs.getInt('start_hour') ?? 19;
       _monitoring = prefs.getBool('monitoring') ?? false;
     });
@@ -100,6 +101,14 @@ class _HomePageState extends State<HomePage> {
     if (!batteryPerm.isGranted) {
       batteryPerm = await Permission.ignoreBatteryOptimizations.request();
     }
+
+    // 使用情况访问权限（检测纷享销客是否打开）
+    final usageGranted = await UsageStats.checkUsagePermission() ?? false;
+    if (!usageGranted) {
+      UsageStats.grantUsagePermission();
+      _showSnack('请在设置中允许「使用情况访问」权限');
+    }
+
     return true;
   }
 
@@ -227,7 +236,7 @@ class _HomePageState extends State<HomePage> {
                 Expanded(
                   child: Slider(
                     value: _threshold,
-                    min: 50, max: 500, divisions: 9,
+                    min: 0, max: 100, divisions: 10,
                     label: '${_threshold.toInt()}m',
                     onChanged: (v) => setState(() => _threshold = v),
                     onChangeEnd: (_) => _saveSettings(),
