@@ -10,11 +10,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  geolocator: ^11.0.0
-  flutter_local_notifications: ^17.0.0
+  geolocator: ^13.0.0
+  flutter_local_notifications: ^18.0.0
   shared_preferences: ^2.2.0
   permission_handler: ^11.0.0
-  installed_apps: ^1.5.0
+  flutter_background_service: ^5.0.5
+  flutter_background_service_android: ^6.2.3
 
 dev_dependencies:
   flutter_test:

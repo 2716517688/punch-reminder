@@ -5,8 +5,10 @@ class NotificationService {
   static const _channelId = 'punch_reminder';
   static const _channelName = '打卡提醒';
   static const _reminderId = 1;
+  static bool _initialized = false;
 
   static Future<void> init() async {
+    if (_initialized) return;
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const settings = InitializationSettings(android: androidSettings);
     await _plugin.initialize(settings);
@@ -21,11 +23,14 @@ class NotificationService {
       enableVibration: true,
     );
     await _plugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
+    _initialized = true;
   }
 
   static Future<void> showReminder() async {
+    if (!_initialized) await init();
     const details = AndroidNotificationDetails(
       _channelId,
       _channelName,
@@ -34,7 +39,7 @@ class NotificationService {
       priority: Priority.high,
       playSound: true,
       enableVibration: true,
-      ongoing: true, // 常驻通知，不可滑掉
+      ongoing: true,
       autoCancel: false,
       ticker: '打卡提醒',
     );
