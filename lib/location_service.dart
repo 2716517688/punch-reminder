@@ -1,12 +1,41 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:usage_stats/usage_stats.dart';
 import 'notification_service.dart';
 
 class LocationService {
   static Timer? _checkTimer;
   static bool _alerted = false;
   static const String _fxiaoxiaokePackage = 'com.fxiaoke.sales';
+  static const _channel = MethodChannel('com.example.punch_reminder/usage');
+
+  /// 检查使用情况访问权限
+  static Future<bool> checkUsagePermission() async {
+    try {
+      return await _channel.invokeMethod<bool>('checkPermission') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 跳转到使用情况访问设置
+  static Future<void> grantUsagePermission() async {
+    try {
+      await _channel.invokeMethod('grantPermission');
+    } catch (_) {}
+  }
+
+  /// 检测纷享销客最近几分钟内是否被使用过
+  static Future<bool> _isFxiaoxiaokeOpened() async {
+    try {
+      return await _channel.invokeMethod<bool>('isAppUsedRecently', {
+        'packageName': _fxiaoxiaokePackage,
+        'minutes': 2,
+      }) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
 
   static void startMonitoring({
     required double officeLat,
@@ -18,12 +47,10 @@ class LocationService {
     stopMonitoring();
     _alerted = false;
 
-    // 每30秒检查一次
     _checkTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
       await _doCheck(officeLat, officeLng, thresholdMeters, startHour, onUpdate);
     });
 
-    // 立即检查一次
     _doCheck(officeLat, officeLng, thresholdMeters, startHour, onUpdate);
   }
 
@@ -50,7 +77,6 @@ class LocationService {
         _startPersistentReminder();
       }
 
-      // 已触发提醒后，检测纷享销客是否打开
       if (_alerted) {
         final opened = await _isFxiaoxiaokeOpened();
         if (opened) {
@@ -61,27 +87,6 @@ class LocationService {
 
       onUpdate(distance, pos, _alerted && isActiveTime);
     } catch (_) {}
-  }
-
-  /// 检测纷享销客最近2分钟内是否被使用过
-  static Future<bool> _isFxiaoxiaokeOpened() async {
-    try {
-      final now = DateTime.now();
-      final start = now.subtract(const Duration(minutes: 2));
-      final stats = await UsageStats.queryUsageStats(start, now);
-      for (final stat in stats) {
-        if (stat.packageName == _fxiaoxiaokePackage) {
-          final lastUsed = stat.lastTimeUsed;
-          if (lastUsed != null) {
-            final lastTime = DateTime.fromMillisecondsSinceEpoch(int.parse(lastUsed));
-            if (lastTime.isAfter(start)) {
-              return true;
-            }
-          }
-        }
-      }
-    } catch (_) {}
-    return false;
   }
 
   static Timer? _reminderTimer;

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:usage_stats/usage_stats.dart';
 import 'location_service.dart';
 import 'notification_service.dart';
 
@@ -103,9 +102,9 @@ class _HomePageState extends State<HomePage> {
     }
 
     // 使用情况访问权限（检测纷享销客是否打开）
-    final usageGranted = await UsageStats.checkUsagePermission() ?? false;
+    final usageGranted = await LocationService.checkUsagePermission();
     if (!usageGranted) {
-      UsageStats.grantUsagePermission();
+      await LocationService.grantUsagePermission();
       _showSnack('请在设置中允许「使用情况访问」权限');
     }
 
