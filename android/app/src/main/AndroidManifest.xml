@@ -16,9 +16,6 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
-    <!-- 小米/MIUI 额外保活 -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-
     <application
         android:label="打卡提醒"
         android:name="${applicationName}"
@@ -41,21 +38,6 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-
-        <!-- 前台定位服务 (flutter_background_service) -->
-        <service
-            android:name="id.flutter.flutter_background_service.BackgroundService"
-            android:foregroundServiceType="location"
-            android:exported="false" />
-
-        <!-- 开机自启动接收器 -->
-        <receiver
-            android:name="id.flutter.flutter_background_service.BootReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
 
         <meta-data
             android:name="flutterEmbedding"
