@@ -1,7 +1,7 @@
 name: punch_reminder
 description: 下班打卡提醒 - 离开公司自动提醒打开纷享销客
 publish_to: 'none'
-version: 1.0.1+2
+version: 1.1.0+3
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
