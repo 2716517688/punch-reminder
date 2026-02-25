@@ -1,16 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'location_service.dart';
-import 'notification_service.dart';
+import 'monitor_channel.dart';
 import 'settings_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await NotificationService.init();
-  await LocationService.initService();
   runApp(const PunchReminderApp());
 }
 
@@ -50,63 +46,45 @@ class _HomePageState extends State<HomePage> {
   bool _monitoring = false;
   String _status = '未启动';
   double? _currentDistance;
-  StreamSubscription<Map<String, dynamic>?>? _updateSub;
-  StreamSubscription<Map<String, dynamic>?>? _launchSub;
-  StreamSubscription<Map<String, dynamic>?>? _checkSub;
+  StreamSubscription? _statusSub;
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
-    _listenUpdates();
+    _listenStatus();
   }
 
   @override
   void dispose() {
-    _updateSub?.cancel();
-    _launchSub?.cancel();
-    _checkSub?.cancel();
+    _statusSub?.cancel();
     super.dispose();
   }
 
-  void _listenUpdates() {
-    _updateSub = LocationService.onUpdate.listen((data) {
-      if (data == null || !mounted) return;
+  void _listenStatus() {
+    _statusSub = MonitorChannel.statusStream.listen((data) {
+      if (!mounted) return;
       setState(() {
-        _currentDistance = data['distance'] as double?;
+        _currentDistance = (data['distance'] as num?)?.toDouble();
+        final status = data['status'] as String? ?? 'monitoring';
         final triggered = data['triggered'] as bool? ?? false;
-        final now = DateTime.now();
-        if (now.hour < _startHour) {
-          _status = '等待激活（${_startHour}:00后）';
-        } else if (triggered) {
-          _status = '请打卡！';
-        } else {
-          _status = '监听中';
+        switch (status) {
+          case 'waiting':
+            _status = '等待激活（${_startHour}:00后）';
+            break;
+          case 'alert':
+            _status = '请打卡！';
+            break;
+          default:
+            _status = '监听中';
         }
       });
-    });
-
-    // 后台要求启动纷享销客
-    _launchSub = LocationService.onLaunchApp.listen((_) async {
-      try {
-        await LocationService.launchFxiaoke();
-      } catch (_) {}
-    });
-
-    // 后台要求检查纷享销客是否已打开
-    _checkSub = LocationService.onCheckApp.listen((_) async {
-      try {
-        final opened = await LocationService.isFxiaokeOpened();
-        if (opened) {
-          LocationService.dismissAlert();
-        }
-      } catch (_) {}
     });
   }
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    final running = await LocationService.isRunning();
+    final running = await MonitorChannel.isRunning();
     setState(() {
       _officeLat = prefs.getDouble('office_lat');
       _officeLng = prefs.getDouble('office_lng');
@@ -144,9 +122,9 @@ class _HomePageState extends State<HomePage> {
     if (!batteryPerm.isGranted) {
       batteryPerm = await Permission.ignoreBatteryOptimizations.request();
     }
-    final usageGranted = await LocationService.checkUsagePermission();
+    final usageGranted = await MonitorChannel.checkUsagePermission();
     if (!usageGranted) {
-      await LocationService.grantUsagePermission();
+      await MonitorChannel.grantUsagePermission();
       _showSnack('请在设置中允许「使用情况访问」权限');
     }
     return true;
@@ -159,7 +137,7 @@ class _HomePageState extends State<HomePage> {
     }
     if (!await _checkPermissions()) return;
 
-    await LocationService.startMonitoring();
+    await MonitorChannel.startMonitor();
     setState(() {
       _monitoring = true;
       _status = '监听中';
@@ -171,7 +149,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _stopMonitoring() async {
-    await LocationService.stopMonitoring();
+    await MonitorChannel.stopMonitor();
     setState(() {
       _monitoring = false;
       _status = '未启动';
@@ -202,7 +180,7 @@ class _HomePageState extends State<HomePage> {
     );
     await _loadSettings();
     if (_monitoring) {
-      LocationService.notifyConfigUpdate();
+      await MonitorChannel.reloadConfig();
     }
   }
 

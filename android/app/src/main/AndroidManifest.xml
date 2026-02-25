@@ -1,5 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- 位置权限 -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -49,9 +48,8 @@
             android:value="2" />
 
         <service
-            android:name="id.flutter.flutter_background_service.BackgroundService"
+            android:name=".MonitorService"
             android:foregroundServiceType="location"
-            android:exported="false"
-            tools:replace="android:exported" />
+            android:exported="false" />
     </application>
 </manifest>

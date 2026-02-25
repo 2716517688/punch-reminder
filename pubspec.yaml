@@ -1,7 +1,7 @@
 name: punch_reminder
 description: 下班打卡提醒 - 离开公司自动提醒打开纷享销客
 publish_to: 'none'
-version: 1.3.1+7
+version: 2.0.0+8
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -11,9 +11,6 @@ dependencies:
   flutter:
     sdk: flutter
   geolocator: ^13.0.0
-  flutter_local_notifications: ^18.0.0
-  flutter_background_service: ^5.0.5
-  flutter_background_service_android: ^6.2.3
   shared_preferences: ^2.2.0
   permission_handler: ^11.0.0
 
