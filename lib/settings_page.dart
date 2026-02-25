@@ -58,11 +58,23 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _calibrateOffice() async {
     _showSnack('正在获取位置...');
     try {
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
+      Position pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 8),
+          ),
+        );
+      } catch (_) {
+        // GPS 超时，降级用网络定位
+        pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.medium,
+            timeLimit: Duration(seconds: 10),
+          ),
+        );
+      }
       setState(() {
         _officeLat = pos.latitude;
         _officeLng = pos.longitude;
@@ -73,7 +85,7 @@ class _SettingsPageState extends State<SettingsPage> {
         '${pos.longitude.toStringAsFixed(6)}',
       );
     } catch (e) {
-      _showSnack('标定失败: $e');
+      _showSnack('标定失败，请到室外或开启WiFi重试');
     }
   }
 
