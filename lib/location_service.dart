@@ -8,7 +8,7 @@ import 'notification_service.dart';
 
 class LocationService {
   static bool _alerted = false;
-  static const String _fxiaoxiaokePackage = 'com.fxiaoke.sales';
+  static const String _fxiaoxiaokePackage = 'com.facishare.fs';
   static const _channel = MethodChannel('com.example.punch_reminder/usage');
 
   /// 初始化后台服务（App 启动时调用一次）
