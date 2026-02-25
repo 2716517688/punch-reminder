@@ -43,21 +43,22 @@ class LocationService {
     required double thresholdMeters,
     required int startHour,
     int intervalSeconds = 30,
+    bool autoLaunch = false,
     required void Function(double distance, Position pos, bool triggered) onUpdate,
   }) {
     stopMonitoring();
     _alerted = false;
 
     _checkTimer = Timer.periodic(Duration(seconds: intervalSeconds), (_) async {
-      await _doCheck(officeLat, officeLng, thresholdMeters, startHour, onUpdate);
+      await _doCheck(officeLat, officeLng, thresholdMeters, startHour, autoLaunch, onUpdate);
     });
 
-    _doCheck(officeLat, officeLng, thresholdMeters, startHour, onUpdate);
+    _doCheck(officeLat, officeLng, thresholdMeters, startHour, autoLaunch, onUpdate);
   }
 
   static Future<void> _doCheck(
     double officeLat, double officeLng, double threshold,
-    int startHour, void Function(double, Position, bool) onUpdate,
+    int startHour, bool autoLaunch, void Function(double, Position, bool) onUpdate,
   ) async {
     try {
       final pos = await Geolocator.getCurrentPosition(
@@ -76,6 +77,9 @@ class LocationService {
       if (isActiveTime && isLeaving && !_alerted) {
         _alerted = true;
         _startPersistentReminder();
+        if (autoLaunch) {
+          _launchFxiaoxiaoke();
+        }
       }
 
       if (_alerted) {
@@ -87,6 +91,14 @@ class LocationService {
       }
 
       onUpdate(distance, pos, _alerted && isActiveTime);
+    } catch (_) {}
+  }
+
+  static Future<void> _launchFxiaoxiaoke() async {
+    try {
+      await _channel.invokeMethod('launchApp', {
+        'packageName': _fxiaoxiaokePackage,
+      });
     } catch (_) {}
   }
 

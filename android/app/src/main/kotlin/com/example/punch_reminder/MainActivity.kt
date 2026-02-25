@@ -29,6 +29,10 @@ class MainActivity : FlutterActivity() {
                     val minutes = call.argument<Int>("minutes") ?: 2
                     result.success(isAppUsedRecently(packageName, minutes))
                 }
+                "launchApp" -> {
+                    val packageName = call.argument<String>("packageName") ?: ""
+                    result.success(launchApp(packageName))
+                }
                 else -> result.notImplemented()
             }
         }
@@ -62,6 +66,16 @@ class MainActivity : FlutterActivity() {
             if (stat.packageName == targetPackage && stat.lastTimeUsed >= start) {
                 return true
             }
+        }
+        return false
+    }
+
+    private fun launchApp(packageName: String): Boolean {
+        val intent = packageManager.getLaunchIntentForPackage(packageName)
+        if (intent != null) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+            return true
         }
         return false
     }

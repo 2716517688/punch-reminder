@@ -44,6 +44,7 @@ class _HomePageState extends State<HomePage> {
   double _threshold = 50;
   int _startHour = 19;
   int _intervalSeconds = 30;
+  bool _autoLaunch = false;
   bool _monitoring = false;
   String _status = '未启动';
   double? _currentDistance;
@@ -62,6 +63,7 @@ class _HomePageState extends State<HomePage> {
       _threshold = prefs.getDouble('threshold') ?? 50;
       _startHour = prefs.getInt('start_hour') ?? 19;
       _intervalSeconds = prefs.getInt('interval_seconds') ?? 30;
+      _autoLaunch = prefs.getBool('auto_launch') ?? false;
       _monitoring = prefs.getBool('monitoring') ?? false;
     });
     if (_monitoring && _officeLat != null) {
@@ -122,6 +124,7 @@ class _HomePageState extends State<HomePage> {
       thresholdMeters: _threshold,
       startHour: _startHour,
       intervalSeconds: _intervalSeconds,
+      autoLaunch: _autoLaunch,
       onUpdate: (distance, pos, triggered) {
         if (!mounted) return;
         setState(() {
@@ -167,6 +170,7 @@ class _HomePageState extends State<HomePage> {
         threshold: _threshold,
         startHour: _startHour,
         intervalSeconds: _intervalSeconds,
+        autoLaunch: _autoLaunch,
       )),
     );
     // 始终重新加载设置

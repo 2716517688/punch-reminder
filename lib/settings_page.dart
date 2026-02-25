@@ -8,6 +8,7 @@ class SettingsPage extends StatefulWidget {
   final double threshold;
   final int startHour;
   final int intervalSeconds;
+  final bool autoLaunch;
 
   const SettingsPage({
     super.key,
@@ -16,6 +17,7 @@ class SettingsPage extends StatefulWidget {
     this.threshold = 50,
     this.startHour = 19,
     this.intervalSeconds = 30,
+    this.autoLaunch = false,
   });
 
   @override
@@ -28,6 +30,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late double _threshold;
   late int _startHour;
   late int _intervalSeconds;
+  late bool _autoLaunch;
   bool _changed = false;
 
   @override
@@ -38,6 +41,7 @@ class _SettingsPageState extends State<SettingsPage> {
     _threshold = widget.threshold;
     _startHour = widget.startHour;
     _intervalSeconds = widget.intervalSeconds;
+    _autoLaunch = widget.autoLaunch;
   }
 
   Future<void> _saveSettings() async {
@@ -47,6 +51,7 @@ class _SettingsPageState extends State<SettingsPage> {
     prefs.setDouble('threshold', _threshold);
     prefs.setInt('start_hour', _startHour);
     prefs.setInt('interval_seconds', _intervalSeconds);
+    prefs.setBool('auto_launch', _autoLaunch);
     _changed = true;
   }
 
@@ -192,6 +197,21 @@ class _SettingsPageState extends State<SettingsPage> {
                     style: TextStyle(fontSize: 12, color: Colors.grey[500])),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // 自动打开纷享销客
+          Card(
+            child: SwitchListTile(
+              title: const Text('自动打开纷享销客', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              subtitle: Text('触发提醒时自动启动纷享销客',
+                style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+              value: _autoLaunch,
+              onChanged: (v) {
+                setState(() => _autoLaunch = v);
+                _saveSettings();
+              },
             ),
           ),
         ],
