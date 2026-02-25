@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
@@ -9,6 +10,7 @@ import 'settings_page.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await NotificationService.init();
+  await LocationService.initService();
   runApp(const PunchReminderApp());
 }
 
@@ -48,15 +50,42 @@ class _HomePageState extends State<HomePage> {
   bool _monitoring = false;
   String _status = '未启动';
   double? _currentDistance;
+  StreamSubscription<Map<String, dynamic>?>? _updateSub;
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
+    _listenUpdates();
+  }
+
+  @override
+  void dispose() {
+    _updateSub?.cancel();
+    super.dispose();
+  }
+
+  void _listenUpdates() {
+    _updateSub = LocationService.onUpdate.listen((data) {
+      if (data == null || !mounted) return;
+      setState(() {
+        _currentDistance = data['distance'] as double?;
+        final triggered = data['triggered'] as bool? ?? false;
+        final now = DateTime.now();
+        if (now.hour < _startHour) {
+          _status = '等待激活（${_startHour}:00后）';
+        } else if (triggered) {
+          _status = '请打卡！';
+        } else {
+          _status = '监听中';
+        }
+      });
+    });
   }
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
+    final running = await LocationService.isRunning();
     setState(() {
       _officeLat = prefs.getDouble('office_lat');
       _officeLng = prefs.getDouble('office_lng');
@@ -64,11 +93,9 @@ class _HomePageState extends State<HomePage> {
       _startHour = prefs.getInt('start_hour') ?? 19;
       _intervalSeconds = prefs.getInt('interval_seconds') ?? 30;
       _autoLaunch = prefs.getBool('auto_launch') ?? false;
-      _monitoring = prefs.getBool('monitoring') ?? false;
+      _monitoring = running;
+      if (_monitoring) _status = '监听中';
     });
-    if (_monitoring && _officeLat != null) {
-      _startMonitoring(silent: true);
-    }
   }
 
   Future<bool> _checkPermissions() async {
@@ -111,6 +138,7 @@ class _HomePageState extends State<HomePage> {
     }
     if (!await _checkPermissions()) return;
 
+    await LocationService.startMonitoring();
     setState(() {
       _monitoring = true;
       _status = '监听中';
@@ -118,40 +146,18 @@ class _HomePageState extends State<HomePage> {
     final prefs = await SharedPreferences.getInstance();
     prefs.setBool('monitoring', true);
 
-    LocationService.startMonitoring(
-      officeLat: _officeLat!,
-      officeLng: _officeLng!,
-      thresholdMeters: _threshold,
-      startHour: _startHour,
-      intervalSeconds: _intervalSeconds,
-      autoLaunch: _autoLaunch,
-      onUpdate: (distance, pos, triggered) {
-        if (!mounted) return;
-        setState(() {
-          _currentDistance = distance;
-          final now = DateTime.now();
-          if (now.hour < _startHour) {
-            _status = '等待激活（${_startHour}:00后）';
-          } else if (triggered) {
-            _status = '请打卡！';
-          } else {
-            _status = '监听中';
-          }
-        });
-      },
-    );
-
     if (!silent) _showSnack('开始监听');
   }
 
-  void _stopMonitoring() {
-    LocationService.stopMonitoring();
+  Future<void> _stopMonitoring() async {
+    await LocationService.stopMonitoring();
     setState(() {
       _monitoring = false;
       _status = '未启动';
       _currentDistance = null;
     });
-    SharedPreferences.getInstance().then((p) => p.setBool('monitoring', false));
+    final prefs = await SharedPreferences.getInstance();
+    prefs.setBool('monitoring', false);
   }
 
   void _showSnack(String msg) {
@@ -162,7 +168,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _openSettings() async {
-    final changed = await Navigator.push<bool>(
+    await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => SettingsPage(
         officeLat: _officeLat,
@@ -173,11 +179,9 @@ class _HomePageState extends State<HomePage> {
         autoLaunch: _autoLaunch,
       )),
     );
-    // 始终重新加载设置
     await _loadSettings();
-    if (changed == true && _monitoring) {
-      _stopMonitoring();
-      _startMonitoring(silent: true);
+    if (_monitoring) {
+      LocationService.notifyConfigUpdate();
     }
   }
 
@@ -214,7 +218,6 @@ class _HomePageState extends State<HomePage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // 大图标
               Container(
                 width: 120,
                 height: 120,
@@ -225,15 +228,11 @@ class _HomePageState extends State<HomePage> {
                 child: Icon(statusIcon, size: 64, color: statusColor),
               ),
               const SizedBox(height: 24),
-
-              // 状态文字
               Text(
                 _status,
                 style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: statusColor),
               ),
               const SizedBox(height: 8),
-
-              // 距离信息
               if (_currentDistance != null)
                 Text(
                   '距公司 ${_currentDistance!.toStringAsFixed(0)} 米',
@@ -247,15 +246,12 @@ class _HomePageState extends State<HomePage> {
                     style: TextStyle(fontSize: 14, color: Colors.orange[300]),
                   ),
                 ),
-
               const SizedBox(height: 48),
-
-              // 大按钮
               SizedBox(
                 width: 200,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: _monitoring ? _stopMonitoring : _startMonitoring,
+                  onPressed: _monitoring ? _stopMonitoring : () => _startMonitoring(),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _monitoring ? Colors.red[700] : Colors.green[700],
                     shape: RoundedRectangleBorder(

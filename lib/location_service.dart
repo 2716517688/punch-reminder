@@ -1,66 +1,78 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/services.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'notification_service.dart';
 
 class LocationService {
-  static Timer? _checkTimer;
   static bool _alerted = false;
   static const String _fxiaoxiaokePackage = 'com.fxiaoke.sales';
   static const _channel = MethodChannel('com.example.punch_reminder/usage');
 
-  /// 检查使用情况访问权限
-  static Future<bool> checkUsagePermission() async {
-    try {
-      return await _channel.invokeMethod<bool>('checkPermission') ?? false;
-    } catch (_) {
-      return false;
-    }
+  /// 初始化后台服务（App 启动时调用一次）
+  static Future<void> initService() async {
+    final service = FlutterBackgroundService();
+    await service.configure(
+      androidConfiguration: AndroidConfiguration(
+        onStart: _onStart,
+        autoStart: false,
+        isForegroundMode: true,
+        notificationChannelId: 'punch_reminder_bg',
+        initialNotificationTitle: '打卡提醒',
+        initialNotificationContent: '监控中...',
+        foregroundServiceNotificationId: 888,
+        foregroundServiceTypes: [AndroidForegroundType.location],
+      ),
+      iosConfiguration: IosConfiguration(
+        autoStart: false,
+        onForeground: _onStart,
+      ),
+    );
   }
 
-  /// 跳转到使用情况访问设置
-  static Future<void> grantUsagePermission() async {
-    try {
-      await _channel.invokeMethod('grantPermission');
-    } catch (_) {}
-  }
+  /// 后台服务入口
+  @pragma('vm:entry-point')
+  static Future<void> _onStart(ServiceInstance service) async {
+    DartPluginRegistrant.ensureInitialized();
 
-  /// 检测纷享销客最近几分钟内是否被使用过
-  static Future<bool> _isFxiaoxiaokeOpened() async {
-    try {
-      return await _channel.invokeMethod<bool>('isAppUsedRecently', {
-        'packageName': _fxiaoxiaokePackage,
-        'minutes': 2,
-      }) ?? false;
-    } catch (_) {
-      return false;
-    }
-  }
+    Timer? checkTimer;
 
-  static void startMonitoring({
-    required double officeLat,
-    required double officeLng,
-    required double thresholdMeters,
-    required int startHour,
-    int intervalSeconds = 30,
-    bool autoLaunch = false,
-    required void Function(double distance, Position pos, bool triggered) onUpdate,
-  }) {
-    stopMonitoring();
-    _alerted = false;
-
-    _checkTimer = Timer.periodic(Duration(seconds: intervalSeconds), (_) async {
-      await _doCheck(officeLat, officeLng, thresholdMeters, startHour, autoLaunch, onUpdate);
+    service.on('stop').listen((_) {
+      checkTimer?.cancel();
+      _stopPersistentReminder();
+      service.stopSelf();
     });
 
-    _doCheck(officeLat, officeLng, thresholdMeters, startHour, autoLaunch, onUpdate);
+    service.on('updateConfig').listen((_) async {
+      // 配置更新时重启定时器
+      checkTimer?.cancel();
+      final prefs = await SharedPreferences.getInstance();
+      final interval = prefs.getInt('interval_seconds') ?? 30;
+      checkTimer = Timer.periodic(Duration(seconds: interval), (_) => _bgCheck(service));
+      _bgCheck(service);
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    final interval = prefs.getInt('interval_seconds') ?? 30;
+
+    checkTimer = Timer.periodic(Duration(seconds: interval), (_) => _bgCheck(service));
+    _bgCheck(service);
   }
 
-  static Future<void> _doCheck(
-    double officeLat, double officeLng, double threshold,
-    int startHour, bool autoLaunch, void Function(double, Position, bool) onUpdate,
-  ) async {
+  /// 后台定位检测
+  static Future<void> _bgCheck(ServiceInstance service) async {
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final officeLat = prefs.getDouble('office_lat');
+      final officeLng = prefs.getDouble('office_lng');
+      final threshold = prefs.getDouble('threshold') ?? 50;
+      final startHour = prefs.getInt('start_hour') ?? 19;
+      final autoLaunch = prefs.getBool('auto_launch') ?? false;
+
+      if (officeLat == null || officeLng == null) return;
+
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
@@ -90,8 +102,41 @@ class LocationService {
         }
       }
 
-      onUpdate(distance, pos, _alerted && isActiveTime);
+      // 发送状态给前台 UI
+      service.invoke('update', {
+        'distance': distance,
+        'lat': pos.latitude,
+        'lng': pos.longitude,
+        'triggered': _alerted && isActiveTime,
+      });
     } catch (_) {}
+  }
+
+  /// 检查使用情况访问权限
+  static Future<bool> checkUsagePermission() async {
+    try {
+      return await _channel.invokeMethod<bool>('checkPermission') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 跳转到使用情况访问设置
+  static Future<void> grantUsagePermission() async {
+    try {
+      await _channel.invokeMethod('grantPermission');
+    } catch (_) {}
+  }
+
+  static Future<bool> _isFxiaoxiaokeOpened() async {
+    try {
+      return await _channel.invokeMethod<bool>('isAppUsedRecently', {
+        'packageName': _fxiaoxiaokePackage,
+        'minutes': 2,
+      }) ?? false;
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<void> _launchFxiaoxiaoke() async {
@@ -118,10 +163,36 @@ class LocationService {
     NotificationService.cancelReminder();
   }
 
-  static void stopMonitoring() {
-    _checkTimer?.cancel();
-    _checkTimer = null;
-    _stopPersistentReminder();
+  /// 启动后台监控
+  static Future<void> startMonitoring() async {
     _alerted = false;
+    final service = FlutterBackgroundService();
+    await service.startService();
+  }
+
+  /// 停止后台监控
+  static Future<void> stopMonitoring() async {
+    _alerted = false;
+    final service = FlutterBackgroundService();
+    service.invoke('stop');
+    _stopPersistentReminder();
+  }
+
+  /// 通知后台服务配置已更新
+  static void notifyConfigUpdate() {
+    final service = FlutterBackgroundService();
+    service.invoke('updateConfig');
+  }
+
+  /// 监听后台服务状态更新
+  static Stream<Map<String, dynamic>?> get onUpdate {
+    final service = FlutterBackgroundService();
+    return service.on('update');
+  }
+
+  /// 服务是否在运行
+  static Future<bool> isRunning() async {
+    final service = FlutterBackgroundService();
+    return await service.isRunning();
   }
 }
