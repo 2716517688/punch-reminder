@@ -72,12 +72,28 @@ class MonitorService : Service() {
     }
 
     fun loadConfig() {
-        officeLat = prefs.getFloat("flutter.office_lat", 0f).toDouble()
-        officeLng = prefs.getFloat("flutter.office_lng", 0f).toDouble()
-        threshold = prefs.getFloat("flutter.threshold", 50f).toDouble()
+        officeLat = getDouble("flutter.office_lat", 0.0)
+        officeLng = getDouble("flutter.office_lng", 0.0)
+        threshold = getDouble("flutter.threshold", 50.0)
         startHour = prefs.getLong("flutter.start_hour", 19).toInt()
         intervalSeconds = prefs.getLong("flutter.interval_seconds", 30).toInt()
         autoLaunch = prefs.getBoolean("flutter.auto_launch", false)
+    }
+
+    // Flutter SharedPreferences 存 double 为 String
+    private fun getDouble(key: String, default: Double): Double {
+        return try {
+            val value = prefs.getAll()[key]
+            when (value) {
+                is Double -> value
+                is Float -> value.toDouble()
+                is Long -> value.toDouble()
+                is String -> value.toDoubleOrNull() ?: default
+                else -> default
+            }
+        } catch (e: Exception) {
+            default
+        }
     }
 
     private fun startChecking() {
