@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'location_service.dart';
 import 'notification_service.dart';
+import 'settings_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,6 +43,7 @@ class _HomePageState extends State<HomePage> {
   double? _officeLng;
   double _threshold = 50;
   int _startHour = 19;
+  int _intervalSeconds = 30;
   bool _monitoring = false;
   String _status = '未启动';
   double? _currentDistance;
@@ -59,20 +61,12 @@ class _HomePageState extends State<HomePage> {
       _officeLng = prefs.getDouble('office_lng');
       _threshold = prefs.getDouble('threshold') ?? 50;
       _startHour = prefs.getInt('start_hour') ?? 19;
+      _intervalSeconds = prefs.getInt('interval_seconds') ?? 30;
       _monitoring = prefs.getBool('monitoring') ?? false;
     });
     if (_monitoring && _officeLat != null) {
       _startMonitoring(silent: true);
     }
-  }
-
-  Future<void> _saveSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (_officeLat != null) prefs.setDouble('office_lat', _officeLat!);
-    if (_officeLng != null) prefs.setDouble('office_lng', _officeLng!);
-    prefs.setDouble('threshold', _threshold);
-    prefs.setInt('start_hour', _startHour);
-    prefs.setBool('monitoring', _monitoring);
   }
 
   Future<bool> _checkPermissions() async {
@@ -100,67 +94,45 @@ class _HomePageState extends State<HomePage> {
     if (!batteryPerm.isGranted) {
       batteryPerm = await Permission.ignoreBatteryOptimizations.request();
     }
-
-    // 使用情况访问权限（检测纷享销客是否打开）
     final usageGranted = await LocationService.checkUsagePermission();
     if (!usageGranted) {
       await LocationService.grantUsagePermission();
       _showSnack('请在设置中允许「使用情况访问」权限');
     }
-
     return true;
-  }
-
-  Future<void> _calibrateOffice() async {
-    if (!await _checkPermissions()) return;
-    setState(() => _status = '正在获取位置...');
-    try {
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-        ),
-      );
-      setState(() {
-        _officeLat = pos.latitude;
-        _officeLng = pos.longitude;
-        _status = '公司坐标已标定';
-      });
-      await _saveSettings();
-      _showSnack('标定成功: ${pos.latitude.toStringAsFixed(6)}, ${pos.longitude.toStringAsFixed(6)}');
-    } catch (e) {
-      setState(() => _status = '标定失败: $e');
-    }
   }
 
   Future<void> _startMonitoring({bool silent = false}) async {
     if (_officeLat == null || _officeLng == null) {
-      _showSnack('请先标定公司坐标');
+      _showSnack('请先在设置中标定公司坐标');
       return;
     }
     if (!await _checkPermissions()) return;
 
     setState(() {
       _monitoring = true;
-      _status = '监听中（$_startHour:00 后激活）';
+      _status = '监听中';
     });
-    await _saveSettings();
+    final prefs = await SharedPreferences.getInstance();
+    prefs.setBool('monitoring', true);
 
     LocationService.startMonitoring(
       officeLat: _officeLat!,
       officeLng: _officeLng!,
       thresholdMeters: _threshold,
       startHour: _startHour,
+      intervalSeconds: _intervalSeconds,
       onUpdate: (distance, pos, triggered) {
         if (!mounted) return;
         setState(() {
           _currentDistance = distance;
           final now = DateTime.now();
           if (now.hour < _startHour) {
-            _status = '等待中（$_startHour:00 后激活），距公司 ${distance.toStringAsFixed(0)}m';
+            _status = '等待激活（${_startHour}:00后）';
           } else if (triggered) {
-            _status = '⚠️ 已离开公司 ${distance.toStringAsFixed(0)}m，请打卡！';
+            _status = '请打卡！';
           } else {
-            _status = '监听中，距公司 ${distance.toStringAsFixed(0)}m';
+            _status = '监听中';
           }
         });
       },
@@ -173,10 +145,10 @@ class _HomePageState extends State<HomePage> {
     LocationService.stopMonitoring();
     setState(() {
       _monitoring = false;
-      _status = '已停止';
+      _status = '未启动';
       _currentDistance = null;
     });
-    _saveSettings();
+    SharedPreferences.getInstance().then((p) => p.setBool('monitoring', false));
   }
 
   void _showSnack(String msg) {
@@ -186,90 +158,109 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  void _openSettings() async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const SettingsPage()),
+    );
+    if (changed == true) {
+      _loadSettings();
+      if (_monitoring) {
+        _stopMonitoring();
+        _startMonitoring(silent: true);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bool configured = _officeLat != null;
+    final Color statusColor;
+    final IconData statusIcon;
+
+    if (!_monitoring) {
+      statusColor = Colors.grey;
+      statusIcon = Icons.location_off;
+    } else if (_status == '请打卡！') {
+      statusColor = Colors.red;
+      statusIcon = Icons.warning_rounded;
+    } else {
+      statusColor = Colors.green;
+      statusIcon = Icons.shield;
+    }
+
     return Scaffold(
-      appBar: AppBar(title: const Text('打卡提醒')),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Icon(
-                      _monitoring ? Icons.location_on : Icons.location_off,
-                      size: 48,
-                      color: _monitoring ? Colors.green : Colors.grey,
+      appBar: AppBar(
+        title: const Text('打卡提醒'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: _openSettings,
+          ),
+        ],
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // 大图标
+              Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: statusColor.withOpacity(0.15),
+                ),
+                child: Icon(statusIcon, size: 64, color: statusColor),
+              ),
+              const SizedBox(height: 24),
+
+              // 状态文字
+              Text(
+                _status,
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: statusColor),
+              ),
+              const SizedBox(height: 8),
+
+              // 距离信息
+              if (_currentDistance != null)
+                Text(
+                  '距公司 ${_currentDistance!.toStringAsFixed(0)} 米',
+                  style: TextStyle(fontSize: 16, color: Colors.grey[400]),
+                ),
+              if (!configured)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    '请先在设置中标定公司坐标',
+                    style: TextStyle(fontSize: 14, color: Colors.orange[300]),
+                  ),
+                ),
+
+              const SizedBox(height: 48),
+
+              // 大按钮
+              SizedBox(
+                width: 200,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _monitoring ? _stopMonitoring : _startMonitoring,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _monitoring ? Colors.red[700] : Colors.green[700],
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(28),
                     ),
-                    const SizedBox(height: 8),
-                    Text(_status, textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 16)),
-                    if (_officeLat != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        '公司: ${_officeLat!.toStringAsFixed(6)}, ${_officeLng!.toStringAsFixed(6)}',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[400]),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _calibrateOffice,
-              icon: const Icon(Icons.my_location),
-              label: Text(_officeLat == null ? '标定公司坐标' : '重新标定'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Text('离开阈值: '),
-                Expanded(
-                  child: Slider(
-                    value: _threshold,
-                    min: 0, max: 100, divisions: 10,
-                    label: '${_threshold.toInt()}m',
-                    onChanged: (v) => setState(() => _threshold = v),
-                    onChangeEnd: (_) => _saveSettings(),
+                  ),
+                  child: Text(
+                    _monitoring ? '停止' : '开始监听',
+                    style: const TextStyle(fontSize: 20, color: Colors.white),
                   ),
                 ),
-                Text('${_threshold.toInt()}m'),
-              ],
-            ),
-            Row(
-              children: [
-                const Text('激活时间: '),
-                Expanded(
-                  child: Slider(
-                    value: _startHour.toDouble(),
-                    min: 17, max: 22, divisions: 5,
-                    label: '$_startHour:00',
-                    onChanged: (v) => setState(() => _startHour = v.toInt()),
-                    onChangeEnd: (_) => _saveSettings(),
-                  ),
-                ),
-                Text('$_startHour:00后'),
-              ],
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _monitoring ? _stopMonitoring : _startMonitoring,
-              icon: Icon(_monitoring ? Icons.stop : Icons.play_arrow),
-              label: Text(_monitoring ? '停止监听' : '开始监听'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                backgroundColor: _monitoring ? Colors.red[700] : Colors.green[700],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

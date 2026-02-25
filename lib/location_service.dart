@@ -42,12 +42,13 @@ class LocationService {
     required double officeLng,
     required double thresholdMeters,
     required int startHour,
+    int intervalSeconds = 30,
     required void Function(double distance, Position pos, bool triggered) onUpdate,
   }) {
     stopMonitoring();
     _alerted = false;
 
-    _checkTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+    _checkTimer = Timer.periodic(Duration(seconds: intervalSeconds), (_) async {
       await _doCheck(officeLat, officeLng, thresholdMeters, startHour, onUpdate);
     });
 
