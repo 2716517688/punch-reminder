@@ -13,7 +13,7 @@ class NotificationService {
     const settings = InitializationSettings(android: androidSettings);
     await _plugin.initialize(settings);
 
-    // 创建高优先级通知渠道
+    // 创建高优先级通知渠道（提醒用）
     const channel = AndroidNotificationChannel(
       _channelId,
       _channelName,
@@ -22,10 +22,22 @@ class NotificationService {
       playSound: true,
       enableVibration: true,
     );
-    await _plugin
+
+    // 创建后台服务通知渠道（常驻通知）
+    const bgChannel = AndroidNotificationChannel(
+      'punch_reminder_bg',
+      '打卡提醒后台服务',
+      description: '后台定位监控服务',
+      importance: Importance.low,
+      playSound: false,
+      enableVibration: false,
+    );
+
+    final androidPlugin = _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
+            AndroidFlutterLocalNotificationsPlugin>();
+    await androidPlugin?.createNotificationChannel(channel);
+    await androidPlugin?.createNotificationChannel(bgChannel);
     _initialized = true;
   }
 

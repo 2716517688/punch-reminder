@@ -36,6 +36,7 @@ class LocationService {
   @pragma('vm:entry-point')
   static Future<void> _onStart(ServiceInstance service) async {
     DartPluginRegistrant.ensureInitialized();
+    await NotificationService.init();
 
     Timer? checkTimer;
 
