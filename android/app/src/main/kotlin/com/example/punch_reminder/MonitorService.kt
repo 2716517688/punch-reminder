@@ -78,6 +78,7 @@ class MonitorService : Service() {
         startHour = prefs.getLong("flutter.start_hour", 19).toInt()
         intervalSeconds = prefs.getLong("flutter.interval_seconds", 30).toInt()
         autoLaunch = prefs.getBoolean("flutter.auto_launch", false)
+        Log.d(TAG, "loadConfig: office=($officeLat,$officeLng) threshold=$threshold startHour=$startHour interval=${intervalSeconds}s autoLaunch=$autoLaunch")
     }
 
     // Flutter SharedPreferences 存 double 为 String
@@ -87,7 +88,7 @@ class MonitorService : Service() {
             when (value) {
                 is Double -> value
                 is Float -> value.toDouble()
-                is Long -> value.toDouble()
+                is Long -> Double.fromBits(value)
                 is String -> value.toDoubleOrNull() ?: default
                 else -> default
             }
@@ -114,11 +115,19 @@ class MonitorService : Service() {
 
     @Suppress("MissingPermission")
     private fun doCheck() {
-        if (officeLat == 0.0 && officeLng == 0.0) return
+        if (officeLat == 0.0 && officeLng == 0.0) {
+            Log.d(TAG, "doCheck: no office coordinates")
+            return
+        }
+        Log.d(TAG, "doCheck: requesting location...")
 
         fusedClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
             .addOnSuccessListener { location: Location? ->
-                if (location == null) return@addOnSuccessListener
+                if (location == null) {
+                    Log.w(TAG, "doCheck: location is null")
+                    return@addOnSuccessListener
+                }
+                Log.d(TAG, "doCheck: got location ${location.latitude}, ${location.longitude}")
                 processLocation(location)
             }
             .addOnFailureListener {
@@ -169,6 +178,7 @@ class MonitorService : Service() {
             NotificationHelper.buildForegroundNotification(this, notifText))
 
         // 回调给 Flutter UI
+        Log.d(TAG, "processLocation: distance=${distance.toInt()}m status=$status callback=${statusCallback != null}")
         statusCallback?.invoke(mapOf(
             "distance" to distance,
             "lat" to location.latitude,
