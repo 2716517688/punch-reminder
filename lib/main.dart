@@ -161,14 +161,19 @@ class _HomePageState extends State<HomePage> {
   void _openSettings() async {
     final changed = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (_) => const SettingsPage()),
+      MaterialPageRoute(builder: (_) => SettingsPage(
+        officeLat: _officeLat,
+        officeLng: _officeLng,
+        threshold: _threshold,
+        startHour: _startHour,
+        intervalSeconds: _intervalSeconds,
+      )),
     );
-    if (changed == true) {
-      _loadSettings();
-      if (_monitoring) {
-        _stopMonitoring();
-        _startMonitoring(silent: true);
-      }
+    // 始终重新加载设置
+    await _loadSettings();
+    if (changed == true && _monitoring) {
+      _stopMonitoring();
+      _startMonitoring(silent: true);
     }
   }
 
