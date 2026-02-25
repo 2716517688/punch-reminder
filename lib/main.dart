@@ -51,6 +51,8 @@ class _HomePageState extends State<HomePage> {
   String _status = '未启动';
   double? _currentDistance;
   StreamSubscription<Map<String, dynamic>?>? _updateSub;
+  StreamSubscription<Map<String, dynamic>?>? _launchSub;
+  StreamSubscription<Map<String, dynamic>?>? _checkSub;
 
   @override
   void initState() {
@@ -62,6 +64,8 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _updateSub?.cancel();
+    _launchSub?.cancel();
+    _checkSub?.cancel();
     super.dispose();
   }
 
@@ -80,6 +84,23 @@ class _HomePageState extends State<HomePage> {
           _status = '监听中';
         }
       });
+    });
+
+    // 后台要求启动纷享销客
+    _launchSub = LocationService.onLaunchApp.listen((_) async {
+      try {
+        await LocationService.launchFxiaoke();
+      } catch (_) {}
+    });
+
+    // 后台要求检查纷享销客是否已打开
+    _checkSub = LocationService.onCheckApp.listen((_) async {
+      try {
+        final opened = await LocationService.isFxiaokeOpened();
+        if (opened) {
+          LocationService.dismissAlert();
+        }
+      } catch (_) {}
     });
   }
 

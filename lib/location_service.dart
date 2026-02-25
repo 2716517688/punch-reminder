@@ -55,6 +55,11 @@ class LocationService {
       _bgCheck(service);
     });
 
+    service.on('dismissAlert').listen((_) {
+      _alerted = false;
+      _stopPersistentReminder();
+    });
+
     final prefs = await SharedPreferences.getInstance();
     final interval = prefs.getInt('interval_seconds') ?? 30;
 
@@ -90,17 +95,15 @@ class LocationService {
       if (isActiveTime && isLeaving && !_alerted) {
         _alerted = true;
         _startPersistentReminder();
+        // autoLaunch 和 UsageStats 检测通过 invoke 发给前台处理
         if (autoLaunch) {
-          _launchFxiaoxiaoke();
+          service.invoke('launchApp');
         }
       }
 
       if (_alerted) {
-        final opened = await _isFxiaoxiaokeOpened();
-        if (opened) {
-          _alerted = false;
-          _stopPersistentReminder();
-        }
+        // 通知前台检查纷享销客是否已打开
+        service.invoke('checkApp');
       }
 
       // 发送状态给前台 UI
@@ -129,7 +132,7 @@ class LocationService {
     } catch (_) {}
   }
 
-  static Future<bool> _isFxiaoxiaokeOpened() async {
+  static Future<bool> isFxiaokeOpened() async {
     try {
       return await _channel.invokeMethod<bool>('isAppUsedRecently', {
         'packageName': _fxiaoxiaokePackage,
@@ -140,7 +143,7 @@ class LocationService {
     }
   }
 
-  static Future<void> _launchFxiaoxiaoke() async {
+  static Future<void> launchFxiaoke() async {
     try {
       await _channel.invokeMethod('launchApp', {
         'packageName': _fxiaoxiaokePackage,
@@ -183,6 +186,26 @@ class LocationService {
   static void notifyConfigUpdate() {
     final service = FlutterBackgroundService();
     service.invoke('updateConfig');
+  }
+
+  /// 前台通知后台：纷享销客已打开，停止提醒
+  static void dismissAlert() {
+    _alerted = false;
+    _stopPersistentReminder();
+    final service = FlutterBackgroundService();
+    service.invoke('dismissAlert');
+  }
+
+  /// 监听后台要求启动纷享销客
+  static Stream<Map<String, dynamic>?> get onLaunchApp {
+    final service = FlutterBackgroundService();
+    return service.on('launchApp');
+  }
+
+  /// 监听后台要求检查纷享销客
+  static Stream<Map<String, dynamic>?> get onCheckApp {
+    final service = FlutterBackgroundService();
+    return service.on('checkApp');
   }
 
   /// 监听后台服务状态更新
