@@ -82,6 +82,10 @@ class MonitorService : Service() {
         Log.d(TAG, "loadConfig: office=($officeLat,$officeLng) threshold=$threshold startHour=$startHour interval=${intervalSeconds}s autoLaunch=$autoLaunch")
     }
 
+    // Flutter SharedPreferences stores doubles as String with a prefix
+    // "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBEb3VibGUu" (base64 of "This is the prefix for Double.")
+    private val DOUBLE_PREFIX = "VGhpcyBpcyB0aGUgcHJlZml4IGZvciBEb3VibGUu"
+
     private fun getDouble(key: String, default: Double): Double {
         return try {
             val value = prefs.getAll()[key]
@@ -89,10 +93,18 @@ class MonitorService : Service() {
                 is Double -> value
                 is Float -> value.toDouble()
                 is Long -> Double.fromBits(value)
-                is String -> value.toDoubleOrNull() ?: default
+                is String -> {
+                    val stripped = if (value.startsWith(DOUBLE_PREFIX)) {
+                        value.removePrefix(DOUBLE_PREFIX)
+                    } else {
+                        value
+                    }
+                    stripped.toDoubleOrNull() ?: default
+                }
                 else -> default
             }
         } catch (e: Exception) {
+            Log.w(TAG, "getDouble($key) error: ${e.message}")
             default
         }
     }
