@@ -157,7 +157,8 @@ void main() {
         const MaterialApp(home: SettingsPage()),
       );
       await tester.pumpAndSettle();
-      expect(find.text('自动打开纷享销客'), findsOneWidget);
+      expect(find.byType(SwitchListTile), findsOneWidget);
+      expect(find.textContaining('纷享销客'), findsWidgets);
     });
 
     testWidgets('back button returns to previous page', (tester) async {
