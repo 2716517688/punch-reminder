@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:geolocator/geolocator.dart';
 import 'monitor_channel.dart';
 import 'settings_page.dart';
 
@@ -95,6 +96,31 @@ class _HomePageState extends State<HomePage> {
       _monitoring = running;
       if (_monitoring) _status = '监听中';
     });
+    // 主动获取一次距离
+    _updateDistance();
+  }
+
+  Future<void> _updateDistance() async {
+    if (_officeLat == null || _officeLng == null) return;
+    try {
+      final perm = await Permission.location.status;
+      if (!perm.isGranted) return;
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 8),
+        ),
+      );
+      final distance = Geolocator.distanceBetween(
+        _officeLat!, _officeLng!, pos.latitude, pos.longitude,
+      );
+      if (!mounted) return;
+      setState(() {
+        _currentDistance = distance;
+      });
+    } catch (_) {
+      // 获取失败不影响主流程
+    }
   }
 
   Future<bool> _checkPermissions() async {
