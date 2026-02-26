@@ -87,13 +87,12 @@ class MainActivity : FlutterActivity() {
             val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val cal = java.util.Calendar.getInstance()
             val now = cal.timeInMillis
-            // 今天 startHour:00 的时间戳
-            cal.set(java.util.Calendar.HOUR_OF_DAY, startHour)
+            // 今天 0:00 开始查，覆盖全天
+            cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
             cal.set(java.util.Calendar.MINUTE, 0)
             cal.set(java.util.Calendar.SECOND, 0)
             cal.set(java.util.Calendar.MILLISECOND, 0)
             val startTime = cal.timeInMillis
-            if (now < startTime) return false
             val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, now)
             stats.any { it.packageName == "com.fxiaoke.sales" && it.lastTimeUsed >= startTime }
         } catch (e: Exception) {
