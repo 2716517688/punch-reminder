@@ -6,11 +6,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
-import com.google.android.gms.location.*
 
 class MonitorService : Service() {
     companion object {
@@ -23,7 +25,7 @@ class MonitorService : Service() {
             private set
     }
 
-    private lateinit var fusedClient: FusedLocationProviderClient
+    private lateinit var locationManager: LocationManager
     private lateinit var prefs: SharedPreferences
     private val handler = Handler(Looper.getMainLooper())
     private var checkRunnable: Runnable? = null
@@ -41,7 +43,7 @@ class MonitorService : Service() {
     override fun onCreate() {
         super.onCreate()
         NotificationHelper.createChannels(this)
-        fusedClient = LocationServices.getFusedLocationProviderClient(this)
+        locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
         prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         isRunning = true
     }
@@ -52,12 +54,7 @@ class MonitorService : Service() {
             NotificationHelper.buildForegroundNotification(this, "监控中...")
         )
         loadConfig()
-        if (intent?.action == "RELOAD_CONFIG") {
-            // 重新加载配置并重启定时器
-            startChecking()
-        } else {
-            startChecking()
-        }
+        startChecking()
         return START_STICKY
     }
 
@@ -81,7 +78,6 @@ class MonitorService : Service() {
         Log.d(TAG, "loadConfig: office=($officeLat,$officeLng) threshold=$threshold startHour=$startHour interval=${intervalSeconds}s autoLaunch=$autoLaunch")
     }
 
-    // Flutter SharedPreferences 存 double 为 String
     private fun getDouble(key: String, default: Double): Double {
         return try {
             val value = prefs.getAll()[key]
@@ -121,18 +117,69 @@ class MonitorService : Service() {
         }
         Log.d(TAG, "doCheck: requesting location...")
 
-        fusedClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
-            .addOnSuccessListener { location: Location? ->
-                if (location == null) {
-                    Log.w(TAG, "doCheck: location is null")
-                    return@addOnSuccessListener
+        // 优先用 GPS，fallback 到 Network
+        val providers = mutableListOf<String>()
+        if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+            providers.add(LocationManager.GPS_PROVIDER)
+        }
+        if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+            providers.add(LocationManager.NETWORK_PROVIDER)
+        }
+
+        if (providers.isEmpty()) {
+            Log.w(TAG, "doCheck: no location provider available")
+            // 尝试用最后已知位置
+            val lastLoc = getLastKnownLocation()
+            if (lastLoc != null) {
+                processLocation(lastLoc)
+            }
+            return
+        }
+
+        var gotLocation = false
+        val timeoutRunnable = Runnable {
+            if (!gotLocation) {
+                Log.w(TAG, "doCheck: location timeout, using last known")
+                val lastLoc = getLastKnownLocation()
+                if (lastLoc != null) processLocation(lastLoc)
+            }
+        }
+        handler.postDelayed(timeoutRunnable, 10_000L)
+
+        for (provider in providers) {
+            try {
+                locationManager.requestSingleUpdate(provider, object : LocationListener {
+                    override fun onLocationChanged(location: Location) {
+                        if (!gotLocation) {
+                            gotLocation = true
+                            handler.removeCallbacks(timeoutRunnable)
+                            Log.d(TAG, "doCheck: got location from $provider: ${location.latitude}, ${location.longitude}")
+                            processLocation(location)
+                        }
+                    }
+                    override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+                    override fun onProviderEnabled(provider: String) {}
+                    override fun onProviderDisabled(provider: String) {}
+                }, Looper.getMainLooper())
+            } catch (e: Exception) {
+                Log.w(TAG, "doCheck: $provider request failed: ${e.message}")
+            }
+        }
+    }
+
+    @Suppress("MissingPermission")
+    private fun getLastKnownLocation(): Location? {
+        val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)
+        var best: Location? = null
+        for (p in providers) {
+            try {
+                val loc = locationManager.getLastKnownLocation(p)
+                if (loc != null && (best == null || loc.time > best.time)) {
+                    best = loc
                 }
-                Log.d(TAG, "doCheck: got location ${location.latitude}, ${location.longitude}")
-                processLocation(location)
-            }
-            .addOnFailureListener {
-                Log.w(TAG, "Location failed: ${it.message}")
-            }
+            } catch (_: Exception) {}
+        }
+        return best
     }
 
     private fun processLocation(location: Location) {
@@ -167,7 +214,6 @@ class MonitorService : Service() {
             else -> "monitoring"
         }
 
-        // 更新前台通知
         val notifText = when (status) {
             "waiting" -> "等待激活（${startHour}:00后）| 距公司 ${distance.toInt()}米"
             "alert" -> "请打卡！| 距公司 ${distance.toInt()}米"
@@ -177,7 +223,6 @@ class MonitorService : Service() {
         nm.notify(NotificationHelper.FOREGROUND_ID,
             NotificationHelper.buildForegroundNotification(this, notifText))
 
-        // 回调给 Flutter UI
         Log.d(TAG, "processLocation: distance=${distance.toInt()}m status=$status callback=${statusCallback != null}")
         statusCallback?.invoke(mapOf(
             "distance" to distance,
