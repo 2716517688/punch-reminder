@@ -157,12 +157,8 @@ void main() {
         const MaterialApp(home: SettingsPage()),
       );
       await tester.pumpAndSettle();
-      // SwitchListTile may be off-screen in ListView, scroll down
-      await tester.scrollUntilVisible(
-        find.textContaining('纷享销客'),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
+      // Drag the ListView down to reveal the switch
+      await tester.drag(find.byType(ListView), const Offset(0, -300));
       await tester.pumpAndSettle();
       expect(find.textContaining('纷享销客'), findsWidgets);
     });
