@@ -28,6 +28,10 @@ class MonitorChannel {
     await _method.invokeMethod('grantUsagePermission');
   }
 
+  static Future<bool> checkPunchedToday(int startHour) async {
+    return await _method.invokeMethod<bool>('checkPunchedToday', {'startHour': startHour}) ?? false;
+  }
+
   /// Native → Flutter 状态流
   static Stream<Map<String, dynamic>> get statusStream {
     return _event.receiveBroadcastStream().map((data) {

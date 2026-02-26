@@ -1,6 +1,7 @@
 package com.example.punch_reminder
 
 import android.app.AppOpsManager
+import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -55,6 +56,10 @@ class MainActivity : FlutterActivity() {
                         startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
                         result.success(null)
                     }
+                    "checkPunchedToday" -> {
+                        val startHour = call.argument<Int>("startHour") ?: 19
+                        result.success(isFxiaokeUsedAfterHour(startHour))
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -75,6 +80,25 @@ class MainActivity : FlutterActivity() {
                     MonitorService.statusCallback = null
                 }
             })
+    }
+
+    private fun isFxiaokeUsedAfterHour(startHour: Int): Boolean {
+        return try {
+            val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+            val cal = java.util.Calendar.getInstance()
+            val now = cal.timeInMillis
+            // 今天 startHour:00 的时间戳
+            cal.set(java.util.Calendar.HOUR_OF_DAY, startHour)
+            cal.set(java.util.Calendar.MINUTE, 0)
+            cal.set(java.util.Calendar.SECOND, 0)
+            cal.set(java.util.Calendar.MILLISECOND, 0)
+            val startTime = cal.timeInMillis
+            if (now < startTime) return false
+            val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, now)
+            stats.any { it.packageName == "com.fxiaoke.sales" && it.lastTimeUsed >= startTime }
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private fun hasUsagePermission(): Boolean {

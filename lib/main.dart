@@ -151,6 +151,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _distanceTimer?.cancel();
       _log('DistanceTimer', 'skipped: Service is running, using EventChannel');
     }
+    // 主动查询今日是否已签退
+    try {
+      final punched = await MonitorChannel.checkPunchedToday(_startHour);
+      _log('Settings', 'checkPunchedToday=$punched');
+      if (punched != _punchedToday) {
+        setState(() { _punchedToday = punched; });
+      }
+    } catch (e) {
+      _log('Settings', 'checkPunchedToday error: $e');
+    }
   }
 
   void _startDistanceTimer() {
