@@ -191,6 +191,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     } catch (e) {
       sw.stop();
       _log('Distance', 'ERROR after ${sw.elapsedMilliseconds}ms: $e');
+      // Fallback: try last known position
+      try {
+        final lastPos = await Geolocator.getLastKnownPosition();
+        if (lastPos != null) {
+          final distance = Geolocator.distanceBetween(
+            _officeLat!, _officeLng!, lastPos.latitude, lastPos.longitude,
+          );
+          _log('Distance', 'fallback lastKnown: lat=${lastPos.latitude} lng=${lastPos.longitude} distance=${distance.toStringAsFixed(1)}m');
+          _lastDistancePoll = DateTime.now();
+          if (!mounted) return;
+          setState(() {
+            _currentDistance = distance;
+            _lastProvider = 'LastKnown';
+          });
+        } else {
+          _log('Distance', 'fallback: no last known position');
+        }
+      } catch (e2) {
+        _log('Distance', 'fallback ERROR: $e2');
+      }
     }
   }
 

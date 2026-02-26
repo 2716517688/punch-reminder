@@ -69,6 +69,10 @@ class MonitorService : Service() {
     }
 
     fun loadConfig() {
+        val allPrefs = prefs.getAll()
+        Log.d(TAG, "loadConfig: all keys=${allPrefs.keys}")
+        Log.d(TAG, "loadConfig: raw office_lat=${allPrefs["flutter.office_lat"]} (${allPrefs["flutter.office_lat"]?.javaClass?.simpleName})")
+        Log.d(TAG, "loadConfig: raw office_lng=${allPrefs["flutter.office_lng"]} (${allPrefs["flutter.office_lng"]?.javaClass?.simpleName})")
         officeLat = getDouble("flutter.office_lat", 0.0)
         officeLng = getDouble("flutter.office_lng", 0.0)
         threshold = getDouble("flutter.threshold", 50.0)
