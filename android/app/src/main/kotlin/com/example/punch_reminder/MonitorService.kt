@@ -304,13 +304,15 @@ class MonitorService : Service() {
 
     private fun startAlertReminder() {
         stopAlertReminder()
+        Log.d(TAG, "startAlertReminder: will repeat every 30s")
         alertRunnable = object : Runnable {
             override fun run() {
+                Log.d(TAG, "alertReminder: re-firing alert notification")
                 NotificationHelper.showAlert(this@MonitorService)
-                handler.postDelayed(this, 60_000L)
+                handler.postDelayed(this, 30_000L)
             }
         }
-        handler.postDelayed(alertRunnable!!, 60_000L)
+        handler.postDelayed(alertRunnable!!, 30_000L)
     }
 
     private fun stopAlertReminder() {
