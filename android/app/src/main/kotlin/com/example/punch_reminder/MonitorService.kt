@@ -199,6 +199,8 @@ class MonitorService : Service() {
     }
 
     private var lastGoodDistance: Double? = null
+    private var punchedToday = false
+    private var punchedDate: Int = -1  // 记录打卡的日期，跨天重置
 
     private fun processLocation(location: Location) {
         val accuracy = location.accuracy
@@ -232,12 +234,29 @@ class MonitorService : Service() {
         val distance = results[0].toDouble()
         lastGoodDistance = distance
 
-        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        val cal = java.util.Calendar.getInstance()
+        val hour = cal.get(java.util.Calendar.HOUR_OF_DAY)
+        val today = cal.get(java.util.Calendar.DAY_OF_YEAR)
         val isActiveTime = hour >= startHour
+
+        // 跨天重置打卡状态
+        if (today != punchedDate) {
+            punchedToday = false
+            punchedDate = today
+            Log.d(TAG, "processLocation: new day, reset punchedToday")
+        }
+
+        // 激活时间后检测纷享销客是否用过，标记为已打卡
+        if (isActiveTime && !punchedToday && isAppUsedRecently(FXIAOKE_PACKAGE, (hour - startHour + 1) * 60)) {
+            punchedToday = true
+            Log.d(TAG, "processLocation: fxiaoke used after $startHour:00, marked as punched today")
+        }
+
         val isLeaving = distance > threshold
 
-        if (isActiveTime && isLeaving && !alerted) {
+        if (isActiveTime && isLeaving && !alerted && !punchedToday) {
             alerted = true
+            Log.d(TAG, "processLocation: ALERT triggered! distance=${distance.toInt()}m")
             NotificationHelper.showAlert(this)
             startAlertReminder()
             if (autoLaunch) {
@@ -248,8 +267,10 @@ class MonitorService : Service() {
         if (alerted) {
             if (isAppUsedRecently(FXIAOKE_PACKAGE, 2)) {
                 alerted = false
+                punchedToday = true
                 stopAlertReminder()
                 NotificationHelper.cancelAlert(this)
+                Log.d(TAG, "processLocation: fxiaoke opened, alert dismissed, punched today")
             }
         }
 
