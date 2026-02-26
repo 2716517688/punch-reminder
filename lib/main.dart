@@ -85,8 +85,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _log('Lifecycle', 'state=$state');
-    if (state == AppLifecycleState.resumed) {
-      _log('Lifecycle', 'App resumed, refreshing distance');
+    if (state == AppLifecycleState.resumed && !_monitoring) {
+      _log('Lifecycle', 'App resumed (not monitoring), refreshing distance');
       _updateDistance();
     }
   }
@@ -141,9 +141,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (_monitoring) _status = '监听中';
     });
     _log('Settings', 'office=($_officeLat,$_officeLng) threshold=$_threshold startHour=$_startHour interval=${_intervalSeconds}s autoLaunch=$_autoLaunch');
-    _updateDistance();
-    // 监听中时依赖 Service 推送，不启动 Flutter 端定时器
+    // 监听中时依赖 Service 推送，不启动 Flutter 端定时器和主动轮询
     if (!_monitoring) {
+      _updateDistance();
       _startDistanceTimer();
     } else {
       _distanceTimer?.cancel();
