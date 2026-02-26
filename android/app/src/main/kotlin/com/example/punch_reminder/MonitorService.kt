@@ -198,10 +198,39 @@ class MonitorService : Service() {
         return best
     }
 
+    private var lastGoodDistance: Double? = null
+
     private fun processLocation(location: Location) {
+        val accuracy = location.accuracy
+        Log.d(TAG, "processLocation: lat=${location.latitude} lng=${location.longitude} accuracy=${accuracy}m provider=${location.provider}")
+
+        // 过滤精度差的位置（>150m），防止锁屏恢复后跳变
+        if (accuracy > 150f) {
+            Log.w(TAG, "processLocation: accuracy ${accuracy}m too low, skipping (using lastGood=$lastGoodDistance)")
+            // 仍然推送上次的好距离，避免 UI 卡住
+            if (lastGoodDistance != null) {
+                val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+                val status = when {
+                    hour < startHour -> "waiting"
+                    alerted -> "alert"
+                    else -> "monitoring"
+                }
+                statusCallback?.invoke(mapOf(
+                    "distance" to lastGoodDistance!!,
+                    "lat" to location.latitude,
+                    "lng" to location.longitude,
+                    "triggered" to (alerted && hour >= startHour),
+                    "status" to status,
+                    "filtered" to true
+                ))
+            }
+            return
+        }
+
         val results = FloatArray(1)
         Location.distanceBetween(officeLat, officeLng, location.latitude, location.longitude, results)
         val distance = results[0].toDouble()
+        lastGoodDistance = distance
 
         val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
         val isActiveTime = hour >= startHour

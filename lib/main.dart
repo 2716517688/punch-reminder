@@ -142,7 +142,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
     _log('Settings', 'office=($_officeLat,$_officeLng) threshold=$_threshold startHour=$_startHour interval=${_intervalSeconds}s autoLaunch=$_autoLaunch');
     _updateDistance();
-    _startDistanceTimer();
+    // 监听中时依赖 Service 推送，不启动 Flutter 端定时器
+    if (!_monitoring) {
+      _startDistanceTimer();
+    } else {
+      _distanceTimer?.cancel();
+      _log('DistanceTimer', 'skipped: Service is running, using EventChannel');
+    }
   }
 
   void _startDistanceTimer() {
@@ -266,6 +272,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (!await _checkPermissions()) return;
     _log('Monitor', 'calling native startMonitor');
     await MonitorChannel.startMonitor();
+    _distanceTimer?.cancel();
+    _log('DistanceTimer', 'stopped: Service takes over');
     setState(() {
       _monitoring = true;
       _status = '监听中';
@@ -286,7 +294,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
     final prefs = await SharedPreferences.getInstance();
     prefs.setBool('monitoring', false);
-    _log('Monitor', 'stopped');
+    _log('Monitor', 'stopped, restarting distance timer');
+    _startDistanceTimer();
   }
 
   void _showSnack(String msg) {
