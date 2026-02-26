@@ -36,3 +36,5 @@ pubspec.lock
 **/android/local.properties
 **/android/**/GeneratedPluginRegistrant.java
 *.jks
+**/android/app/key.properties
+keystore_base64.txt
