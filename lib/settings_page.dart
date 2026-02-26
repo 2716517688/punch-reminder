@@ -9,6 +9,7 @@ class SettingsPage extends StatefulWidget {
   final int startHour;
   final int intervalSeconds;
   final bool autoLaunch;
+  final bool punchedToday;
 
   const SettingsPage({
     super.key,
@@ -18,6 +19,7 @@ class SettingsPage extends StatefulWidget {
     this.startHour = 19,
     this.intervalSeconds = 30,
     this.autoLaunch = false,
+    this.punchedToday = false,
   });
 
   @override
@@ -114,6 +116,27 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // 今日打卡状态
+          Card(
+            color: widget.punchedToday ? Colors.green[900] : Colors.grey[850],
+            child: ListTile(
+              leading: Icon(
+                widget.punchedToday ? Icons.check_circle : Icons.radio_button_unchecked,
+                color: widget.punchedToday ? Colors.green : Colors.grey,
+                size: 32,
+              ),
+              title: Text(
+                widget.punchedToday ? '今日已打卡 ✅' : '今日未打卡',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: widget.punchedToday ? Colors.green[100] : Colors.grey[400],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
           // 公司坐标
           Card(
             child: Padding(

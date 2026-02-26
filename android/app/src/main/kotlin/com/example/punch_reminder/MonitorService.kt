@@ -295,7 +295,8 @@ class MonitorService : Service() {
             "lat" to location.latitude,
             "lng" to location.longitude,
             "triggered" to (alerted && isActiveTime),
-            "status" to status
+            "status" to status,
+            "punchedToday" to punchedToday
         ))
     }
 

@@ -63,6 +63,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   int _eventChannelCount = 0;
   int _distancePollCount = 0;
   String _lastProvider = '';
+  bool _punchedToday = false;
 
   @override
   void initState() {
@@ -107,6 +108,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         final status = data['status'] as String? ?? 'monitoring';
         final triggered = data['triggered'] as bool? ?? false;
         _log('EventChannel', 'distance=$_currentDistance status=$status triggered=$triggered');
+        _punchedToday = data['punchedToday'] as bool? ?? _punchedToday;
         switch (status) {
           case 'waiting':
             _status = '等待激活（${_startHour}:00后）';
@@ -316,6 +318,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         startHour: _startHour,
         intervalSeconds: _intervalSeconds,
         autoLaunch: _autoLaunch,
+        punchedToday: _punchedToday,
       )),
     );
     _log('Nav', 'returned from settings, reloading');
