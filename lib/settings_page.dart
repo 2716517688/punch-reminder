@@ -126,7 +126,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 size: 32,
               ),
               title: Text(
-                widget.punchedToday ? '今日已打卡 ✅' : '今日未打卡',
+                widget.punchedToday ? '今日已签退 ✅' : '今日未签退',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
