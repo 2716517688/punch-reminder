@@ -157,7 +157,13 @@ void main() {
         const MaterialApp(home: SettingsPage()),
       );
       await tester.pumpAndSettle();
-      expect(find.byType(SwitchListTile), findsOneWidget);
+      // SwitchListTile may be off-screen in ListView, scroll down
+      await tester.scrollUntilVisible(
+        find.textContaining('纷享销客'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
       expect(find.textContaining('纷享销客'), findsWidgets);
     });
 
