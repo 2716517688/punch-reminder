@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
+import 'tools_page.dart';
 
 class SettingsPage extends StatefulWidget {
   final double? officeLat;
@@ -247,6 +248,18 @@ class _SettingsPageState extends State<SettingsPage> {
                 setState(() => _autoLaunch = v);
                 _saveSettings();
               },
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // 辅助工具入口
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.build_outlined),
+              title: const Text('辅助工具', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const ToolsPage())),
             ),
           ),
         ],

@@ -19,6 +19,9 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        // 注册加热模块
+        HeaterChannel.register(flutterEngine, this)
+
         // MethodChannel: Flutter → Native 指令
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL)
             .setMethodCallHandler { call, result ->

@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
 import 'monitor_channel.dart';
 import 'settings_page.dart';
+import 'heater_service.dart';
 
 void _log(String tag, String msg) {
   final ts = DateTime.now().toIso8601String().substring(11, 23);
@@ -64,6 +65,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   int _distancePollCount = 0;
   String _lastProvider = '';
   bool _punchedToday = false;
+  double _batteryTemp = -1;
+  bool _heating = false;
+  bool _heaterEnabled = false;
+  double _heaterTrigger = HeaterService.defaultTriggerTemp;
+  StreamSubscription? _heaterSub;
 
   @override
   void initState() {
@@ -72,6 +78,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _loadSettings();
     _listenStatus();
+    _initHeater();
   }
 
   @override
@@ -80,6 +87,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _statusSub?.cancel();
     _distanceTimer?.cancel();
+    _heaterSub?.cancel();
     super.dispose();
   }
 
@@ -127,6 +135,32 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
   }
 
+  Future<void> _initHeater() async {
+    _heaterEnabled = await HeaterService.getEnabled();
+    _heaterTrigger = await HeaterService.getTriggerTemp();
+    _heaterSub = HeaterService.stream.listen((data) {
+      if (!mounted) return;
+      final temp = (data['temperature'] as num?)?.toDouble() ?? -1;
+      final heating = data['heating'] as bool? ?? false;
+      setState(() {
+        _batteryTemp = temp;
+        _heating = heating;
+      });
+      _autoHeaterControl(temp, heating);
+    });
+  }
+
+  void _autoHeaterControl(double temp, bool heating) {
+    if (!_heaterEnabled || temp < 0) return;
+    if (temp <= _heaterTrigger && !heating) {
+      _log('Heater', 'temp=${temp}°C <= trigger=${_heaterTrigger}°C, starting');
+      HeaterService.startHeating();
+    } else if (temp >= HeaterService.targetTemp && heating) {
+      _log('Heater', 'temp=${temp}°C >= target=${HeaterService.targetTemp}°C, stopping');
+      HeaterService.stopHeating();
+    }
+  }
+
   Future<void> _loadSettings() async {
     _log('Settings', 'loading...');
     final prefs = await SharedPreferences.getInstance();
@@ -161,6 +195,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     } catch (e) {
       _log('Settings', 'checkPunchedToday error: $e');
     }
+    // 刷新加热设置
+    _heaterEnabled = await HeaterService.getEnabled();
+    _heaterTrigger = await HeaterService.getTriggerTemp();
   }
 
   void _startDistanceTimer() {
@@ -399,6 +436,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               if (_currentDistance != null)
                 Text('距公司 ${_currentDistance!.toStringAsFixed(0)} 米',
                   style: TextStyle(fontSize: 16, color: Colors.grey[400])),
+              if (_batteryTemp >= 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    _heating
+                        ? '🔥 ${_batteryTemp.toStringAsFixed(1)}°C 加热中'
+                        : '🌡️ ${_batteryTemp.toStringAsFixed(1)}°C',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: _heating ? Colors.orange : Colors.grey[500],
+                    ),
+                  ),
+                ),
               if (!configured)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
